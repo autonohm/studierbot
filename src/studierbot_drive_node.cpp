@@ -3,8 +3,10 @@
 #include <cmath>
 
 
+// includes for ros
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 
 
 using namespace std;
@@ -53,25 +55,8 @@ public:
                             );
 
 
-    // _timer = this->create_wall_timer(
-    //     100ms, 
-    //     [this](){
-    //         for(size_t dev = 0; dev<_mc.size(); dev++)
-    //         {
-    //             if(_mc[dev]->waitForSync())
-    //             {
-    //                 float response[2];
-    //                 _mc[dev]->getWheelResponse(response);
-    //                 // std::cout << " " << response[0] << " " << response[1];
-    //             }
-    //             else
-    //             {
-    //                 std::cout << "# Error synchronizing with device" << _mc[dev]->getCanId() << std::endl;
-    //             };
-    //         }
-    //     }
-    // );
-
+    // create a publisher for the odometry
+    _odom_pub = this->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
 
 
     // send initial zero values 
@@ -160,16 +145,36 @@ private:
 
             this->setRPM(_mc[dev], r);
 
+
+            std::vector<float> response_vec;
+
             if(_mc[dev]->waitForSync())
             {
                 float response[2];
                 _mc[dev]->getWheelResponse(response);
                 // std::cout << " " << response[0] << " " << response[1];
+                response_vec.push_back(response[0]);
+                response_vec.push_back(response[1]);
+
+                
+
             }
             else
             {
                 std::cout << "# Error synchronizing with device" << _mc[dev]->getCanId() << std::endl;
             };
+
+            // update odometry for a mecanum drive based on the response container with omega1 to omega4
+            _odom_msg.header.stamp = this->now();
+            _odom_msg.header.frame_id = "odom";
+            _odom_msg.child_frame_id = "base_link";
+
+            _odom_msg.twist.twist.linear.x  = (response_vec[0] + response_vec[1] + response_vec[2] + response_vec[3]) * _kinematic.wheel_radius / 4;
+            _odom_msg.twist.twist.linear.y  = (-response_vec[0] + response_vec[1] + response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4;
+            _odom_msg.twist.twist.angular.z = (-response_vec[0] + response_vec[1] - response_vec[2] + response_vec[3]) * _kinematic.wheel_radius / (4*(_kinematic.l_x + _kinematic.l_y));
+
+            _odom_pub->publish(_odom_msg);
+
         }
         usleep(10000);
     }
@@ -179,6 +184,11 @@ private:
     // ros varibales
     rclcpp::TimerBase::SharedPtr                               _timer;
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr _twist_sub;
+
+    // publish the odometry
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr      _odom_pub;
+
+    nav_msgs::msg::Odometry                                    _odom_msg;
 
     // variables for motor control and the kinematics   
     std::unique_ptr<SocketCAN>       _can;
