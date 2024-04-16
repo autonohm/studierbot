@@ -34,7 +34,14 @@ ament_target_dependencies(simple_joy2vel_node rclcpp geometry_msgs sensor_msgs)
 install(TARGETS
   studierbot_drive_node
   simple_joy2vel_node
-  DESTINATION lib/${PROJECT_NAME})
+  DESTINATION lib/${PROJECT_NAME}
+  )
+
+# Install launch files.
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}/
+)
 
 
 
