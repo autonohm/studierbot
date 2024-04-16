@@ -153,8 +153,8 @@ private:
                 float response[2];
                 _mc[dev]->getWheelResponse(response);
                 // std::cout << " " << response[0] << " " << response[1];
-                response_vec.push_back(response[0]);
-                response_vec.push_back(response[1]);
+                response_vec.push_back(response[0] / (2*M_PI));
+                response_vec.push_back(response[1] / (2*M_PI));
 
                 
 
@@ -169,9 +169,22 @@ private:
             _odom_msg.header.frame_id = "odom";
             _odom_msg.child_frame_id = "base_link";
 
-            _odom_msg.twist.twist.linear.x  = (response_vec[0] + response_vec[1] + response_vec[2] + response_vec[3]) * _kinematic.wheel_radius / 4;
-            _odom_msg.twist.twist.linear.y  = (-response_vec[0] + response_vec[1] + response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4;
+            _odom_msg.twist.twist.linear.y  = ( response_vec[0] + response_vec[1] + response_vec[2] + response_vec[3]) * _kinematic.wheel_radius / 4;
+            _odom_msg.twist.twist.linear.x  = (-response_vec[0] + response_vec[1] + response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4;
             _odom_msg.twist.twist.angular.z = (-response_vec[0] + response_vec[1] - response_vec[2] + response_vec[3]) * _kinematic.wheel_radius / (4*(_kinematic.l_x + _kinematic.l_y));
+
+            // convert in rad
+
+
+            const float dt = 1/25.0;
+            _odom_msg.pose.pose.position.x      += _odom_msg.twist.twist.linear.x  * dt;
+            _odom_msg.pose.pose.position.y      += _odom_msg.twist.twist.linear.y  * dt;
+            _odom_msg.pose.pose.position.z       = 0.0;
+
+            _odom_msg.pose.pose.orientation.x    = 0.0;
+            _odom_msg.pose.pose.orientation.y    = 0.0;
+            _odom_msg.pose.pose.orientation.z   += _odom_msg.twist.twist.angular.z * dt;
+            _odom_msg.pose.pose.orientation.w    = 1.0;
 
             _odom_pub->publish(_odom_msg);
 
