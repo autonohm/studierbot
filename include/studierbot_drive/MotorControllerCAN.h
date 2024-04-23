@@ -66,6 +66,36 @@ struct MotorParams
     antiWindup     = p.antiWindup;
     invertEnc      = p.invertEnc;
   }
+
+  /**
+   * Assignment operator
+   * @param[in] p parameter instance to be copied
+   * @return reference to this instance
+   */
+  MotorParams& operator=(const MotorParams &p)
+  {
+    frequencyScale = p.frequencyScale;
+    inputWeight    = p.inputWeight;
+    maxPulseWidth  = p.maxPulseWidth;
+    timeout        = p.timeout;
+    gearRatio      = p.gearRatio;
+    encoderRatio   = p.encoderRatio;
+    rpmMax         = p.rpmMax;
+    responseMode   = p.responseMode;
+    kp             = p.kp;
+    ki             = p.ki;
+    kd             = p.kd;
+    antiWindup     = p.antiWindup;
+    invertEnc      = p.invertEnc;
+    return *this; 
+  }
+
+  /**
+   * Equality operator
+   * @param[in] p parameter instance to be compared
+   * @return true if all parameters are equal
+   */
+  // bool operator==(const MotorParams &p) const = default;
 };
 
 /**

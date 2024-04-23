@@ -10,7 +10,10 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(geometry2 REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 
 include_directories(include/)
@@ -25,8 +28,8 @@ add_executable(studierbot_drive_node src/studierbot_drive_node.cpp
 
 add_executable(simple_joy2vel_node src/simple_joy2vel_node.cpp)
 
-ament_target_dependencies(studierbot_drive_node rclcpp geometry_msgs nav_msgs)
-ament_target_dependencies(simple_joy2vel_node rclcpp geometry_msgs sensor_msgs)
+ament_target_dependencies(studierbot_drive_node rclcpp geometry_msgs nav_msgs sensor_msgs geometry2 tf2 tf2_ros)
+ament_target_dependencies(simple_joy2vel_node rclcpp geometry_msgs sensor_msgs geometry2 tf2 tf2_ros)
 
 
 

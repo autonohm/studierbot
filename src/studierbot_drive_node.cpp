@@ -1,12 +1,18 @@
 #include "studierbot_drive/MotorControllerCAN.h"
 #include <unistd.h>
 #include <cmath>
+#include <memory>
+
 
 
 // includes for ros
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <nav_msgs/msg/odometry.hpp>
+#include "geometry_msgs/msg/transform_stamped.hpp"
+#include <tf2_ros/transform_broadcaster.h>
+#include <tf2/LinearMath/Quaternion.h>
+
 
 
 using namespace std;
@@ -30,7 +36,7 @@ public:
    * Constructor to initialize the node
    * @param motorParams: MotorParams object with the motor parameters
    */
-  StudierbotDriveNode(MotorParams motorParams = MotorParams())
+  StudierbotDriveNode( MotorParams motorParams = MotorParams())
   : Node("studierbot_drive")
   {
     _motorParams = motorParams;
@@ -57,6 +63,11 @@ public:
 
     // create a publisher for the odometry
     _odom_pub = this->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
+
+
+    // create a transform broadcaster for the odometry
+    _tf_broadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+
 
 
     // send initial zero values 
@@ -165,9 +176,9 @@ private:
             };
 
             // update odometry for a mecanum drive based on the response container with omega1 to omega4
-            _odom_msg.header.stamp = this->now();
-            _odom_msg.header.frame_id = "odom";
-            _odom_msg.child_frame_id = "base_link";
+            _odom_msg.header.stamp      = this->now();
+            _odom_msg.header.frame_id   = "odom";
+            _odom_msg.child_frame_id    = "base_link";
 
             _odom_msg.twist.twist.linear.y  = ( response_vec[0] + response_vec[1] + response_vec[2] + response_vec[3]) * _kinematic.wheel_radius / 4;
             _odom_msg.twist.twist.linear.x  = (-response_vec[0] + response_vec[1] + response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4;
@@ -175,18 +186,60 @@ private:
 
             // convert in rad
 
+            ///todo create a timer to update the odometry
 
-            const float dt = 1/25.0;
+
+            const double dt = 1/15.0;
             _odom_msg.pose.pose.position.x      += _odom_msg.twist.twist.linear.x  * dt;
             _odom_msg.pose.pose.position.y      += _odom_msg.twist.twist.linear.y  * dt;
             _odom_msg.pose.pose.position.z       = 0.0;
 
-            _odom_msg.pose.pose.orientation.x    = 0.0;
-            _odom_msg.pose.pose.orientation.y    = 0.0;
-            _odom_msg.pose.pose.orientation.z   += _odom_msg.twist.twist.angular.z * dt;
-            _odom_msg.pose.pose.orientation.w    = 1.0;
+
+            // create quaternion from yaw
+            tf2::Quaternion q;
+            q.setRPY(0, 0, _odom_msg.twist.twist.angular.z * dt);
+            _odom_msg.pose.pose.orientation.x    = q.x();
+            _odom_msg.pose.pose.orientation.y    = q.y();
+            _odom_msg.pose.pose.orientation.z    = q.z();
+            _odom_msg.pose.pose.orientation.w    = q.w();
+
+            // set the covariance values for twist
+            _odom_msg.twist.covariance[0] = 0.1;
+            _odom_msg.twist.covariance[7] = 0.1;
+            _odom_msg.twist.covariance[14] = 0.1;
+            _odom_msg.twist.covariance[21] = 0.1;
+            _odom_msg.twist.covariance[28] = 0.1;
+            _odom_msg.twist.covariance[35] = 0.1;
+
+
+            // set the covariance values for pose
+            _odom_msg.pose.covariance[0] = 0.1;
+            _odom_msg.pose.covariance[7] = 0.1;
+            _odom_msg.pose.covariance[14] = 0.1;
+            _odom_msg.pose.covariance[21] = 0.1;
+            _odom_msg.pose.covariance[28] = 0.1;
+            _odom_msg.pose.covariance[35] = 0.1;
+
 
             _odom_pub->publish(_odom_msg);
+
+
+            // publish the odometry as tf
+            geometry_msgs::msg::Transform transform;
+            transform.translation.x           = _odom_msg.pose.pose.position.x;
+            transform.translation.y           = _odom_msg.pose.pose.position.y;
+            transform.translation.z           = _odom_msg.pose.pose.position.z;
+            transform.rotation                = _odom_msg.pose.pose.orientation;
+
+            geometry_msgs::msg::TransformStamped transformStamped;
+            transformStamped.header.stamp     = this->now();
+            transformStamped.header.frame_id  = "odom";
+            transformStamped.child_frame_id   = "base_link";
+            transformStamped.transform        = transform;
+
+            _tf_broadcaster->sendTransform(transformStamped);
+
+
 
         }
         usleep(10000);
@@ -201,7 +254,10 @@ private:
     // publish the odometry
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr      _odom_pub;
 
+
+    // odometry related members
     nav_msgs::msg::Odometry                                    _odom_msg;
+    std::shared_ptr<tf2_ros::TransformBroadcaster>             _tf_broadcaster;
 
     // variables for motor control and the kinematics   
     std::unique_ptr<SocketCAN>       _can;
