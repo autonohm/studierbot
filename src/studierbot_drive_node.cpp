@@ -45,6 +45,10 @@ public:
     _can = std::make_unique<SocketCAN>(std::string("can0"));
     _can->startListener();
 
+    //wait 2.5 seconds till the can is ready
+    usleep(2500000);
+    
+
     for(unsigned int dev=0; dev<g_INSTANCES; dev++)
     {
         MotorControllerCAN* m = new MotorControllerCAN(_can.get(), dev, motorParams);
@@ -71,30 +75,34 @@ public:
 
 
     // send initial zero values 
-    std::vector<float> rpms;
-    for(unsigned int i=0 ; i<4 ; i++)
-    {
-        rpms.push_back(0);
-    }
-    this->setRPMs(rpms); 
+    // std::vector<float> rpms;
+    // for(unsigned int i=0 ; i<4 ; i++)
+    // {
+    //     rpms.push_back(0);
+    // }
+    // this->setRPMs(rpms); 
 
 
     // init odom msg
-    _odom_msg.header.frame_id = "odom";
-    _odom_msg.child_frame_id  = "base_link";
-    _odom_msg.pose.pose.position.x = 0.0;
-    _odom_msg.pose.pose.position.y = 0.0;
-    _odom_msg.pose.pose.position.z = 0.0;
+    _odom_msg.header.frame_id         = "odom";
+    _odom_msg.child_frame_id          = "base_link";
+    
+    _odom_msg.pose.pose.position.x    = 0.0;
+    _odom_msg.pose.pose.position.y    = 0.0;
+    _odom_msg.pose.pose.position.z    = 0.0;
+    
     _odom_msg.pose.pose.orientation.x = 0.0;
     _odom_msg.pose.pose.orientation.y = 0.0;
     _odom_msg.pose.pose.orientation.z = 0.0;
     _odom_msg.pose.pose.orientation.w = 1.0;
-    _odom_msg.twist.twist.linear.x = 0.0;
-    _odom_msg.twist.twist.linear.y = 0.0;
-    _odom_msg.twist.twist.linear.z = 0.0;
-    _odom_msg.twist.twist.angular.x = 0.0;
-    _odom_msg.twist.twist.angular.y = 0.0;
-    _odom_msg.twist.twist.angular.z = 0.0;
+
+    _odom_msg.twist.twist.linear.x    = 0.0;
+    _odom_msg.twist.twist.linear.y    = 0.0;
+    _odom_msg.twist.twist.linear.z    = 0.0;
+
+    _odom_msg.twist.twist.angular.x   = 0.0;
+    _odom_msg.twist.twist.angular.y   = 0.0;
+    _odom_msg.twist.twist.angular.z   = 0.0;
 
 
 
@@ -118,6 +126,7 @@ private:
         const double v_x    = msg->linear.x;
         const double v_y    = msg->linear.y;
         const double omega  = msg->angular.z;
+
 
         const double omega_1 =  (v_x + v_y - (omega * (_kinematic.l_x + _kinematic.l_y))) / _kinematic.wheel_radius * 2*M_PI;
         const double omega_2 = -(v_x - v_y + (omega * (_kinematic.l_x + _kinematic.l_y))) / _kinematic.wheel_radius * 2*M_PI;
@@ -167,6 +176,8 @@ private:
      */
     void setRPMs(std::vector<float> rpms)
     {
+        std::vector<float> response_vec;
+
         for(size_t dev = 0; dev<_mc.size(); dev++)
         {
             std::vector<float> r;
@@ -176,7 +187,6 @@ private:
             this->setRPM(_mc[dev], r);
 
 
-            std::vector<float> response_vec;
 
             if(_mc[dev]->waitForSync())
             {
@@ -189,38 +199,48 @@ private:
             {
                 std::cout << "# Error synchronizing with device" << _mc[dev]->getCanId() << std::endl;
             };
+        }
 
 
 
-            // debug output of the response_vec values
-            for(size_t i=0; i<response_vec.size(); i++)
-            {
-                std::cout << "Response " << i << ": " << response_vec[i] << std::endl;
-            }
+            // output size of response vector for debugging
+            std::cout << "Response vector size: " << response_vec.size() << std::endl;
+
+
+            // // debug output of the response_vec values
+            // for(size_t i=0; i<response_vec.size(); i++)
+            // {
+            //     std::cout << "Response " << i << ": " << response_vec[i] << std::endl;
+            // }
 
 
             // update odometry for a mecanum drive based on the response container with omega1 to omega4
-            _odom_msg.header.stamp      = this->now();
+            _odom_msg.header.stamp          = this->now();
 
-            // _odom_msg.twist.twist.linear.y  = ( response_vec[0] + response_vec[1] + response_vec[2] + response_vec[3]) * _kinematic.wheel_radius / 4;
-            _odom_msg.twist.twist.linear.x  = (-response_vec[0] + response_vec[1] + response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4;
-            _odom_msg.twist.twist.angular.z = (response_vec[0] - response_vec[1] + response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / (4*(_kinematic.l_x + _kinematic.l_y));
+            _odom_msg.twist.twist.linear.x  = ( response_vec[0] - response_vec[1] + response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4;
 
-            _odom_msg.twist.twist.angular.y = (response_vec[0] - response_vec[1] + response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / (4*(_kinematic.l_x + _kinematic.l_y));
+            _odom_msg.twist.twist.linear.y  = ( response_vec[0] + response_vec[1] - response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4;
 
-            // _odom_msg.twist.twist.linear.y = (response_vec[0] - response_vec[1] + response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4;
+            _odom_msg.twist.twist.angular.z = (-response_vec[0] - response_vec[1] - response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / (4*(_kinematic.l_x + _kinematic.l_y)) * 4*M_PI;
+
+
+            // coutput of the twist values for debugging
+            RCLCPP_INFO(this->get_logger(), "Twist x: %f, Twist y: %f, Twist z: %f", _odom_msg.twist.twist.linear.x, _odom_msg.twist.twist.linear.y, _odom_msg.twist.twist.angular.z );
+
 
             // convert in rad
 
             ///todo create a timer to update the odometry
 
 
+            const double dt = 1.0/10.0;
 
+            _odom_msg.header.stamp               = this->now();
 
-            const double dt = 1.0/15.0;
             _odom_msg.pose.pose.position.x      += _odom_msg.twist.twist.linear.x  * dt;
             _odom_msg.pose.pose.position.y      += _odom_msg.twist.twist.linear.y  * dt;
             _odom_msg.pose.pose.position.z       = 0.0;
+
 
             // output of twist x and y for debugging
             // RCLCPP_INFO(this->get_logger(), "Twist x: %f, Twist y: %f", _odom_msg.twist.twist.linear.x, _odom_msg.twist.twist.linear.y );
@@ -229,15 +249,15 @@ private:
 
             // create quaternion from yaw
             tf2::Quaternion q;
-            q.setRPY(0.0, 0.0, 0.0/*_odom_msg.twist.twist.angular.z * dt*/);
+            q.setRPY(0.0, 0.0, _odom_msg.twist.twist.angular.z * dt);
             _odom_msg.pose.pose.orientation.x    = q.x();
             _odom_msg.pose.pose.orientation.y    = q.y();
             _odom_msg.pose.pose.orientation.z    = q.z();
             _odom_msg.pose.pose.orientation.w    = q.w();
 
             // set the covariance values for twist
-            _odom_msg.twist.covariance[0] = 0.1;
-            _odom_msg.twist.covariance[7] = 0.1;
+            _odom_msg.twist.covariance[0]  = 0.01;
+            _odom_msg.twist.covariance[7]  = 0.01;
             _odom_msg.twist.covariance[14] = 0.0;
             _odom_msg.twist.covariance[21] = 0.0;
             _odom_msg.twist.covariance[28] = 0.0;
@@ -245,12 +265,12 @@ private:
 
 
             // set the covariance values for pose
-            _odom_msg.pose.covariance[0] = 0.1;
-            _odom_msg.pose.covariance[7] = 0.1;
-            _odom_msg.pose.covariance[14] = 0.0;
-            _odom_msg.pose.covariance[21] = 0.0;
-            _odom_msg.pose.covariance[28] = 0.0;
-            _odom_msg.pose.covariance[35] = 0.1;
+            _odom_msg.pose.covariance[0]   = 0.1;
+            _odom_msg.pose.covariance[7]   = 0.1;
+            _odom_msg.pose.covariance[14]  = 0.0;
+            _odom_msg.pose.covariance[21]  = 0.0;
+            _odom_msg.pose.covariance[28]  = 0.0;
+            _odom_msg.pose.covariance[35]  = 0.1;
 
 
             _odom_pub->publish(_odom_msg);
@@ -261,7 +281,14 @@ private:
             transform.translation.x           = _odom_msg.pose.pose.position.x;
             transform.translation.y           = _odom_msg.pose.pose.position.y;
             transform.translation.z           = _odom_msg.pose.pose.position.z;
-            transform.rotation                = _odom_msg.pose.pose.orientation;
+
+
+            transform.rotation.x              = _odom_msg.pose.pose.orientation.x;
+            transform.rotation.y              = _odom_msg.pose.pose.orientation.y;
+            transform.rotation.z              = _odom_msg.pose.pose.orientation.z;
+            transform.rotation.w              = _odom_msg.pose.pose.orientation.w;
+
+            // transform.rotation                = _odom_msg.pose.pose.orientation;
 
             geometry_msgs::msg::TransformStamped transformStamped;
             transformStamped.header.stamp     = this->now();
@@ -273,7 +300,6 @@ private:
 
 
 
-        }
         usleep(10000);
     }
     
