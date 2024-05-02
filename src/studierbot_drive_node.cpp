@@ -123,6 +123,8 @@ public:
 private:
     void cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg)
     {
+
+
         const double v_x    = msg->linear.x;
         const double v_y    = msg->linear.y;
         const double omega  = msg->angular.z;
@@ -176,6 +178,16 @@ private:
      */
     void setRPMs(std::vector<float> rpms)
     {
+        if (_twist_cb_init == false)
+        {
+            _time_last = this->now();
+            _twist_cb_init = true;
+
+            return; 
+        }
+
+
+
         std::vector<float> response_vec;
 
         for(size_t dev = 0; dev<_mc.size(); dev++)
@@ -201,34 +213,28 @@ private:
             };
         }
 
-
-
-            // output size of response vector for debugging
-            std::cout << "Response vector size: " << response_vec.size() << std::endl;
-
-
             // update odometry for a mecanum drive based on the response container with omega1 to omega4
             _odom_msg.header.stamp          = this->now();
             _odom_msg.twist.twist.linear.x  = ( response_vec[0] - response_vec[1] + response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4 / (2 * M_PI);
             _odom_msg.twist.twist.linear.y  = ( response_vec[0] + response_vec[1] - response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4 / (2 * M_PI);
             _odom_msg.twist.twist.angular.z = (-response_vec[0] - response_vec[1] - response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / (4*(_kinematic.l_x + _kinematic.l_y)) /  (2 * M_PI);
 
+            // output of the twist values for debugging
+            // RCLCPP_INFO(this->get_logger(), "Twist x: %f, Twist y: %f, Twist z: %f", _odom_msg.twist.twist.linear.x, _odom_msg.twist.twist.linear.y, _odom_msg.twist.twist.angular.z );
 
-            // coutput of the twist values for debugging
-            RCLCPP_INFO(this->get_logger(), "Twist x: %f, Twist y: %f, Twist z: %f", _odom_msg.twist.twist.linear.x, _odom_msg.twist.twist.linear.y, _odom_msg.twist.twist.angular.z );
-
-
-            // convert in rad
 
             ///todo create a timer to update the odometry
+            // const double dt = 1.0/10.0;
 
+            const double deltaT = (this->now() - _time_last).seconds();
 
-            const double dt = 1.0/10.0;
+            // debug output of deltaT
+            RCLCPP_INFO(this->get_logger(), "Delta T: %f", deltaT);
 
             _odom_msg.header.stamp               = this->now();
 
-            _odom_msg.pose.pose.position.x      += _odom_msg.twist.twist.linear.x  * dt;
-            _odom_msg.pose.pose.position.y      += _odom_msg.twist.twist.linear.y  * dt;
+            _odom_msg.pose.pose.position.x      += _odom_msg.twist.twist.linear.x  * deltaT;
+            _odom_msg.pose.pose.position.y      += _odom_msg.twist.twist.linear.y  * deltaT;
             _odom_msg.pose.pose.position.z       = 0.0;
 
 
@@ -238,7 +244,7 @@ private:
 
 
             // create quaternion from yaw
-            _orientation += _odom_msg.twist.twist.angular.z * dt;   
+            _orientation += _odom_msg.twist.twist.angular.z * deltaT;   
 
             tf2::Quaternion q;
             q.setRPY(0.0, 0.0, _orientation);
@@ -300,6 +306,10 @@ private:
     // ros varibales
     rclcpp::TimerBase::SharedPtr                               _timer;
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr _twist_sub;
+
+    // variable to store current time to calculate delta T
+    rclcpp::Time                                                _time_last;
+    bool                                                       _twist_cb_init = false; 
 
     // publish the odometry
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr      _odom_pub;
