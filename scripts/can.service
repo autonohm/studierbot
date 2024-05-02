@@ -1,0 +1,9 @@
+[Unit]
+Description=Script to bring up the can interface of the robot after boot
+After=network-online.target
+
+[Service]
+ExecStart=/home/pi/ros2_student_ws/src/studierbot_drive/scripts/can_up.sh
+
+[Install]
+WantedBy=multi-user.target

@@ -227,7 +227,9 @@ private:
             // const double dt = 1.0/10.0;
 
             const double deltaT = (this->now() - _time_last).seconds();
+            _time_last = this->now();
 
+            
             // debug output of deltaT
             RCLCPP_INFO(this->get_logger(), "Delta T: %f", deltaT);
 
