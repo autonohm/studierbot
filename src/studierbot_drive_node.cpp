@@ -207,21 +207,11 @@ private:
             std::cout << "Response vector size: " << response_vec.size() << std::endl;
 
 
-            // // debug output of the response_vec values
-            // for(size_t i=0; i<response_vec.size(); i++)
-            // {
-            //     std::cout << "Response " << i << ": " << response_vec[i] << std::endl;
-            // }
-
-
             // update odometry for a mecanum drive based on the response container with omega1 to omega4
             _odom_msg.header.stamp          = this->now();
-
-            _odom_msg.twist.twist.linear.x  = ( response_vec[0] - response_vec[1] + response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4;
-
-            _odom_msg.twist.twist.linear.y  = ( response_vec[0] + response_vec[1] - response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4;
-
-            _odom_msg.twist.twist.angular.z = (-response_vec[0] - response_vec[1] - response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / (4*(_kinematic.l_x + _kinematic.l_y)) * 4*M_PI;
+            _odom_msg.twist.twist.linear.x  = ( response_vec[0] - response_vec[1] + response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4 / (2 * M_PI);
+            _odom_msg.twist.twist.linear.y  = ( response_vec[0] + response_vec[1] - response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4 / (2 * M_PI);
+            _odom_msg.twist.twist.angular.z = (-response_vec[0] - response_vec[1] - response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / (4*(_kinematic.l_x + _kinematic.l_y)) /  (2 * M_PI);
 
 
             // coutput of the twist values for debugging
@@ -248,8 +238,10 @@ private:
 
 
             // create quaternion from yaw
+            _orientation += _odom_msg.twist.twist.angular.z * dt;   
+
             tf2::Quaternion q;
-            q.setRPY(0.0, 0.0, _odom_msg.twist.twist.angular.z * dt);
+            q.setRPY(0.0, 0.0, _orientation);
             _odom_msg.pose.pose.orientation.x    = q.x();
             _odom_msg.pose.pose.orientation.y    = q.y();
             _odom_msg.pose.pose.orientation.z    = q.z();
@@ -322,6 +314,9 @@ private:
     std::vector<MotorControllerCAN*> _mc;
     MotorParams                      _motorParams;
     Kinematic                        _kinematic;
+
+    // orientation of robot in rad
+    double                           _orientation = 0.0;
 };
 
 
