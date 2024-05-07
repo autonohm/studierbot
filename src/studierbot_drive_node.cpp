@@ -244,8 +244,8 @@ private:
 
         // update odometry for a mecanum drive based on the response container with omega1 to omega4
         _odom_msg.header.stamp          = this->now();
-        _odom_msg.twist.twist.linear.x  = ( response_vec[0] - response_vec[1] + response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4                                     * ( M_PI) / 60.0;
-        _odom_msg.twist.twist.linear.y  = ( response_vec[0] + response_vec[1] - response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4                                     * ( M_PI) / 60.0;
+        _odom_msg.twist.twist.linear.x  = ( response_vec[0] - response_vec[1] + response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4  * ( M_PI) / 60.0;
+        _odom_msg.twist.twist.linear.y  = ( response_vec[0] + response_vec[1] - response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4  * ( M_PI) / 60.0;
         _odom_msg.twist.twist.angular.z = (-response_vec[0] - response_vec[1] - response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / (4*(_kinematic.l_x + _kinematic.l_y)) * ( M_PI) / 60.0;
 
         // output of the twist values for debugging
