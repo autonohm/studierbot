@@ -9,7 +9,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <std_msgs/msg/float32_multi_array.hpp>
-#include <std_msgs/msg/
+#include <std_msgs/msg/float32.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include <tf2_ros/transform_broadcaster.h>
@@ -69,6 +69,9 @@ public:
 
     // create a publisher for the odometry
     _odom_pub = this->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
+
+    // create a publisher for the rpms
+    _rpm_pub = this->create_publisher<std_msgs::msg::Float32MultiArray>("rpms", 10);
 
 
     // create a transform broadcaster for the odometry
@@ -132,13 +135,13 @@ private:
         const double omega  = msg->angular.z;
 
 
-        const double omega_1 =  (v_x + v_y - (omega * (_kinematic.l_x + _kinematic.l_y))) / _kinematic.wheel_radius * 2*M_PI;
-        const double omega_2 = -(v_x - v_y + (omega * (_kinematic.l_x + _kinematic.l_y))) / _kinematic.wheel_radius * 2*M_PI;
-        const double omega_3 =  (v_x - v_y - (omega * (_kinematic.l_x + _kinematic.l_y))) / _kinematic.wheel_radius * 2*M_PI;
-        const double omega_4 = -(v_x + v_y + (omega * (_kinematic.l_x + _kinematic.l_y))) / _kinematic.wheel_radius * 2*M_PI;
+        const double omega_1 =  (v_x + v_y - (omega * (_kinematic.l_x + _kinematic.l_y))) / _kinematic.wheel_radius * 60.0 / ( M_PI);
+        const double omega_2 = -(v_x - v_y + (omega * (_kinematic.l_x + _kinematic.l_y))) / _kinematic.wheel_radius * 60.0 / ( M_PI);
+        const double omega_3 =  (v_x - v_y - (omega * (_kinematic.l_x + _kinematic.l_y))) / _kinematic.wheel_radius * 60.0 / ( M_PI);
+        const double omega_4 = -(v_x + v_y + (omega * (_kinematic.l_x + _kinematic.l_y))) / _kinematic.wheel_radius * 60.0 / ( M_PI);
 
         // output of all omega values for debugging
-        // RCLCPP_INFO(this->get_logger(), "Omega 1: %f, Omega 2: %f, Omega 3: %f, Omega 4: %f", omega_1, omega_2, omega_3, omega_4 );
+        RCLCPP_INFO(this->get_logger(), "Omega 1: %f, Omega 2: %f, Omega 3: %f, Omega 4: %f", omega_1, omega_2, omega_3, omega_4 );
 
 
         // create a vector of floats to store the RPM values for each motor
@@ -206,8 +209,11 @@ private:
             {
                 float response[2];
                 _mc[dev]->getWheelResponse(response);
-                response_vec.push_back(response[0] / (2*M_PI));
-                response_vec.push_back(response[1] / (2*M_PI));
+
+                std::cout << "Response: " << response[0] << " " << response[1] << std::endl;
+
+                response_vec.push_back(response[0] );
+                response_vec.push_back(response[1] );
             }
             else
             {
@@ -217,15 +223,30 @@ private:
 
         // publish the response values as a float array
         auto response_msg = std_msgs::msg::Float32MultiArray();
-        response_msg.data = response_vec;
+        response_msg.data.clear(); 
+        response_msg.data.resize(4); 
+        response_msg.layout.dim.push_back(std_msgs::msg::MultiArrayDimension());
+        response_msg.layout.dim[0].size     = 4;
+        response_msg.layout.dim[0].stride   = 1;
+        response_msg.layout.data_offset     = 0;
+
+        
+        // copy the data
+        response_msg.data[0] = response_vec[0];    
+        response_msg.data[1] = response_vec[1];
+        response_msg.data[2] = response_vec[2];
+        response_msg.data[3] = response_vec[3];
+
         _rpm_pub->publish(response_msg);
+
+
 
 
         // update odometry for a mecanum drive based on the response container with omega1 to omega4
         _odom_msg.header.stamp          = this->now();
-        _odom_msg.twist.twist.linear.x  = ( response_vec[0] - response_vec[1] + response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4 / (2 * M_PI);
-        _odom_msg.twist.twist.linear.y  = ( response_vec[0] + response_vec[1] - response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4 / (2 * M_PI);
-        _odom_msg.twist.twist.angular.z = (-response_vec[0] - response_vec[1] - response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / (4*(_kinematic.l_x + _kinematic.l_y)) /  (2 * M_PI);
+        _odom_msg.twist.twist.linear.x  = ( response_vec[0] - response_vec[1] + response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4                                     * ( M_PI) / 60.0;
+        _odom_msg.twist.twist.linear.y  = ( response_vec[0] + response_vec[1] - response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / 4                                     * ( M_PI) / 60.0;
+        _odom_msg.twist.twist.angular.z = (-response_vec[0] - response_vec[1] - response_vec[2] - response_vec[3]) * _kinematic.wheel_radius / (4*(_kinematic.l_x + _kinematic.l_y)) * ( M_PI) / 60.0;
 
         // output of the twist values for debugging
         // RCLCPP_INFO(this->get_logger(), "Twist x: %f, Twist y: %f, Twist z: %f", _odom_msg.twist.twist.linear.x, _odom_msg.twist.twist.linear.y, _odom_msg.twist.twist.angular.z );
@@ -305,13 +326,20 @@ private:
     
 
 
+
+
+
+
+
+
+
     // ros varibales
-    rclcpp::TimerBase::SharedPtr                               _timer;
-    rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr _twist_sub;
+    rclcpp::TimerBase::SharedPtr                                        _timer;
+    rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr          _twist_sub;
 
     // variable to store current time to calculate delta T
-    rclcpp::Time                                               _time_last;
-    bool                                                       _twist_cb_init = false; 
+    rclcpp::Time                                                        _time_last;
+    bool                                                                _twist_cb_init = false; 
 
     // publish the odometry
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr               _odom_pub;
@@ -320,13 +348,13 @@ private:
     rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr      _rpm_pub;
 
     
-
-    // publisher for raw rpms data
-    rclcpp::Publisher<
-
     // odometry related members
-    nav_msgs::msg::Odometry                                    _odom_msg;
-    std::shared_ptr<tf2_ros::TransformBroadcaster>             _tf_broadcaster;
+    nav_msgs::msg::Odometry                                             _odom_msg;
+    std::shared_ptr<tf2_ros::TransformBroadcaster>                      _tf_broadcaster;
+
+
+
+
 
     // variables for motor control and the kinematics   
     std::unique_ptr<SocketCAN>       _can;
